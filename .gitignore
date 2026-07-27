@@ -1,8 +1,12 @@
-# run.sh 的运行日志
+# 临时文件
+_tmp_*.md
+*.tmp
+
+# 运行日志
 .log_*.txt
 **/.log_*.txt
 
-# Obsidian 本地状态（工作区布局、插件缓存，不需要同步）
+# Obsidian 本地状态
 .obsidian/workspace.json
 .obsidian/workspace-mobile.json
 .obsidian/cache
@@ -10,8 +14,4 @@
 # 系统文件
 .DS_Store
 Thumbs.db
-
-# 素材是只读输入，体积大且可从原始 srt 重新生成，不入库
-# 如需连素材一起同步，删掉下面两行
-00_素材/**/*.txt
-!00_素材/**/.gitkeep
+_tmp_*

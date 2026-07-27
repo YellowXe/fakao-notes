@@ -37,65 +37,19 @@ DRYRUN="${DRYRUN:-0}"
 SUB_FILTER="${SUB:-}"
 MIN_CHARS=2000
 
-# ── 素材目录 → 分科规范 / 输出根 / 老师 ──────────────────────
-# ⚠️ 与 00_流程/目录映射.md 保持一致。目录名和规范文件名有两处不一致,
-#    不要改成字符串推导。
-resolve_spec() {
-  case "$1" in
-    三国法)     SPEC=三国法;               OUT_BASE=三国法;              TEACHER=杨     ;;
-    刑法)       SPEC=刑法;                 OUT_BASE=刑法;                TEACHER=""     ;;
-    民法李建伟) SPEC=民法;                 OUT_BASE=民法;                TEACHER=李建伟 ;;
-    民法孟献贵) SPEC=民法;                 OUT_BASE=民法;                TEACHER=孟献贵 ;;
-    民诉法)     SPEC=民诉;                 OUT_BASE=民诉;                TEACHER=""     ;;
-    刑诉向高甲) SPEC=刑诉;                 OUT_BASE=刑诉;                TEACHER=向高甲 ;;
-    刑诉左宁)   SPEC=刑诉;                 OUT_BASE=刑诉;                TEACHER=左宁   ;;
-    行政法)     SPEC=行政法与行政诉讼法;   OUT_BASE=行政法与行政诉讼法;  TEACHER=""     ;;
-    理论法)     SPEC=理论法;               OUT_BASE=理论法;              TEACHER=""     ;;
-    商经知)     SPEC=商经知;               OUT_BASE=商经知;              TEACHER=""     ;;
-    *)
-      echo "✗ 未知素材目录: $1"
-      echo "  已登记的目录见 00_流程/目录映射.md;新增目录需同时改该文件与本脚本 resolve_spec()"
-      exit 1 ;;
-  esac
-}
+# ── 目录映射(共享实现,verify.sh 用同一份) ────────────────────
+# shellcheck source=00_流程/map.sh
+. "00_流程/map.sh"
 
-# ── 子学科识别(仅三国法) ─────────────────────────────────────
-# ⚠️ 顺序不可颠倒:私法、经济法的名字里也含"国际"二字,必须先匹配长的
-detect_sub() {
-  case "$1" in
-    *国际私法*)          echo 国际私法   ;;
-    *国际经济法*)        echo 国际经济法 ;;
-    *国际公法*|*国际法*) echo 国际公法   ;;
-    *)                   echo ""         ;;
-  esac
-}
-
-resolve_spec "$SRC_NAME"
+resolve_spec "$SRC_NAME" || exit 1
 SRC_DIR="00_素材/$SRC_NAME"
-SPEC_FILE="00_规范/${SPEC}.md"
 
 [[ -d "$SRC_DIR"   ]] || { echo "✗ 素材目录不存在: $SRC_DIR"; exit 1; }
 [[ -f "$SPEC_FILE" ]] || { echo "✗ 分科规范不存在: $SPEC_FILE"; exit 1; }
 [[ -f "CLAUDE.md"  ]] || { echo "✗ CLAUDE.md 不存在,请在 vault 根目录运行"; exit 1; }
 
-# ── 主线老师:决定产出进正式目录还是 补充/ ────────────────────
-MAIN_TEACHER="$(grep -m1 '^主线老师:' "$SPEC_FILE" | sed 's/^主线老师:[[:space:]]*//')"
-IS_MAINLINE=1
-if [[ -n "$TEACHER" ]]; then
-  if [[ "$MAIN_TEACHER" == *"$TEACHER"* ]]; then
-    IS_MAINLINE=1
-  else
-    IS_MAINLINE=0
-  fi
-fi
-
-compute_out() {   # $1 = 子学科(可为空)
-  if [[ -n "${OUTDIR:-}" ]]; then echo "$OUTDIR"; return; fi
-  local base="$OUT_BASE"
-  [[ -n "$1" ]] && base="$base/$1"
-  [[ "$IS_MAINLINE" -eq 0 ]] && base="$base/补充"
-  echo "$base"
-}
+# 主线老师:决定产出进正式目录还是 补充/
+resolve_mainline
 
 echo "素材: $SRC_DIR"
 echo "规范: $SPEC_FILE"
@@ -198,6 +152,9 @@ run_topic() {
 1. CLAUDE.md            —— 特别是开头的「五条铁律」
 2. ${SPEC_FILE}          —— 分科规范,与 CLAUDE.md 冲突时以此为准
 3. 00_样本/反例/反例_典型幻觉形态.md —— 七种幻觉形态,产出前后各自查一遍
+4. 00_样本/正例/ 下若有本科范本,读一份对齐格式与颗粒度
+   ⚠️ 只学格式,不得取用其中任何法律内容,不得照搬其小节构成
+5. 00_流程/自检报告模板.md —— 自检报告的固定格式
 
 ⚠️ 读不到 ${SPEC_FILE} 就中止并报告,不要用通用规则代跑。
 
@@ -212,8 +169,10 @@ $(printf '%s\n' "${files[@]}")
 
 要求:
 - 不要再自行分组,上面就是本专题的完整文件列表
-- 完成后按 CLAUDE.md「处理完的自检」输出四张表的**实际结果**
-  (触发词覆盖表需实际计数;高风险项溯源表需附 8–20 字字幕原文片段)
+- **自检报告写成文件**:${out}/_自检/专题${tp}.md,格式照 00_流程/自检报告模板.md
+  ⚠️ 溯源表的「字幕原文片段」必须**原样照抄字幕**(包括 ASR 错字),用反引号包裹。
+     之后会用 ./verify.sh 把这些片段拿回字幕逐字检索,抄成规范表述会导致检索失败
+  ⚠️ 触发词次数必须是**实际计数**,不要估算
 - 只处理这一个专题,不要继续下一个
 - 不要修改 CLAUDE.md 和 ${SPEC_FILE}
 EOF
@@ -300,6 +259,7 @@ wait
 
 echo
 echo "全部结束。接下来:"
-echo "  1. 逐个验收深入版(重点看溯源表和被舍弃的考点)"
-echo "  2. /backfill $SRC_NAME   回填错字表"
-echo "  3. 全科跑完后 /rollup $SRC_NAME   生成预习版和冲刺版"
+echo "  1. ./verify.sh $SRC_NAME        ← 先跑这个。零成本校验溯源片段是否真在字幕里"
+echo "  2. 逐个验收深入版(重点看被舍弃的考点和星级判断)"
+echo "  3. /backfill $SRC_NAME          回填错字表"
+echo "  4. 全科跑完后 /rollup $SRC_NAME  生成预习版和冲刺版"

@@ -45,7 +45,9 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
 # ── 把全部字幕拼成一份,另存一份去标点的宽松版 ────────────────
-cat "$SRC_DIR"/*.txt > "$WORK/all.txt"
+# ⚠️ 必须去掉换行:清洗稿有单行版也有多行版,换行是清洗产物而非语义分段。
+#    片段若跨行,不去换行会导致大量假失败。
+cat "$SRC_DIR"/*.txt | tr -d '\n\r' > "$WORK/all.txt"
 strip_punct() {
   sed -e 's/，//g' -e 's/。//g' -e 's/、//g' -e 's/；//g' -e 's/：//g' \
       -e 's/？//g' -e 's/！//g' -e 's/…//g' -e 's/·//g' \

@@ -97,7 +97,10 @@ extract_snippets() {
   | sed -e 's/^`//' -e 's/`$//' \
   | grep -v '^[[:space:]]*$' \
   | grep -v '^——$' \
-  | grep -v '^-*$'
+  | grep -v '^-*$' \
+  | grep -v '^#' \
+  | grep -v '\.\(txt\|md\|sh\|py\)$' \
+  | grep -v '^【.*】$'
 }
 
 REPORTS="$(collect_reports)"

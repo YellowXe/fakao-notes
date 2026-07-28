@@ -157,6 +157,22 @@ while IFS= read -r report; do
     MISS_LIST="${MISS_LIST}${report}"$'\n'
   fi
 
+  # ── 覆盖率提示 ────────────────────────────────────────────
+  # 脚本只能验「填进来的对不对」,验不了「该填的填没填」。
+  # 溯源表填得越少越容易全部命中,所以粗略比一下笔记里的数字量。
+  tp_num="$(basename "$report" .md | sed 's/^专题//')"
+  note_dir="$(dirname "$(dirname "$report")")"
+  note_file="$(ls "$note_dir"/专题${tp_num}*.md 2>/dev/null | head -1)"
+  if [[ -n "$note_file" && -f "$note_file" ]]; then
+    note_nums="$(grep -o '[0-9][0-9]*' "$note_file" | wc -l | tr -d ' ')"
+    echo "      笔记中出现数字 ${note_nums} 处,溯源表 ${n} 条"
+    if [[ "$note_nums" -gt 0 ]] && [[ $(( n * 3 )) -lt "$note_nums" ]]; then
+      echo "      ⚠ 溯源表条数明显偏少 —— 大量数字未被校验。"
+      echo "        规范要求法条/数字/真题/口诀「每一条都要能指回字幕」;"
+      echo "        某类超过 20 条时列前 20 条并注明该类总数。"
+    fi
+  fi
+
   TOTAL=$(( TOTAL + n )); HIT=$(( HIT + h )); LOOSE=$(( LOOSE + l )); MISS=$(( MISS + m ))
 done < <(printf '%s\n' "$REPORTS")
 

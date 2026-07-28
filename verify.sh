@@ -168,9 +168,30 @@ while IFS= read -r report; do
     echo "      笔记中出现数字 ${note_nums} 处,溯源表 ${n} 条"
     if [[ "$note_nums" -gt 0 ]] && [[ $(( n * 3 )) -lt "$note_nums" ]]; then
       echo "      ⚠ 溯源表条数明显偏少 —— 大量数字未被校验。"
-      echo "        规范要求法条/数字/真题/口诀「每一条都要能指回字幕」;"
-      echo "        某类超过 20 条时列前 20 条并注明该类总数。"
+      echo "        规范要求数字类全覆盖;法条超 20 条时列前 20 条并注明总数。"
     fi
+  fi
+
+  # ── 片段是否真的包含被验证的数字 ──────────────────────────
+  # 片段命中 ≠ 内容有据:挑一句附近确实存在的话也能通过校验,但什么都没证明。
+  # 这里检查「笔记中的表述」列里的数字,是否出现在「字幕原文片段」列里。
+  # (中文数字如「四部分」「三类」查不了,规范有要求但脚本无法覆盖)
+  mismatch="$(awk '/^##[ 　]*溯源/{i=1;next} /^##[ 　]/{i=0} i' "$report" \
+    | grep '^|' | grep -v '^|[[:space:]]*-' | grep -v '类型.*片段' \
+    | while IFS='|' read -r _c1 _typ _desc _snip _rest; do
+        [[ -z "${_snip:-}" ]] && continue
+        # 去掉页码 P24 这类,它们不是被验证对象
+        d="$(printf '%s' "${_desc:-}" | sed 's/[Pp][0-9][0-9]*//g')"
+        for num in $(printf '%s' "$d" | grep -o '[0-9][0-9]*' | sort -u); do
+          if ! printf '%s' "$_snip" | grep -q -- "$num"; then
+            printf '      ⚠ 片段未含被验证的数字 %s:%s\n' \
+              "$num" "$(printf '%s' "${_desc}" | sed 's/^ *//;s/ *$//')"
+          fi
+        done
+      done)"
+  if [[ -n "$mismatch" ]]; then
+    printf '%s\n' "$mismatch"
+    echo "        这些条目虽然片段能命中,但片段里没有要验证的那个数字,等于没验。"
   fi
 
   TOTAL=$(( TOTAL + n )); HIT=$(( HIT + h )); LOOSE=$(( LOOSE + l )); MISS=$(( MISS + m ))
